@@ -12,7 +12,7 @@ var (
   host = flag.String("host", "ws://localhost:8080/ws?poolId=deal:228", "websocket server address")
   done = make(chan bool)
   connections = make(map[int]bool)
-  msgs = make(map[string]int)
+  msgStats = make(map[string]int)
   receivedMsgs = make(chan string)
 )
 
@@ -27,26 +27,26 @@ func main() {
       c = &Connection{id: i, send: make(chan []byte, 256)}
       connections[i] = c
       go connections[i].dial(*host)
-      time.Sleep(5 * time.Millisecond)
+      time.Sleep(2 * time.Millisecond)
     }
 
     go func () {
       for {
         log.Println("\n\nReceived messages: ")
-        for m, n := range msgs {
+        for m, n := range msgStats {
           log.Println(m, n)
         }
-        time.Sleep(5 * time.Second)
+        time.Sleep(1 * time.Second)
       }
     }();
 
     for {
       select {
       case m := <- receivedMsgs:
-        if _, ok := msgs[m]; ok {
-          msgs[m] += 1
+        if _, ok := msgStats[m]; ok {
+          msgStats[m] += 1
         } else {
-          msgs[m] = 1
+          msgStats[m] = 1
         }
       }
     }

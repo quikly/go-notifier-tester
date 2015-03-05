@@ -43,24 +43,37 @@ func (c *Connection) writer() {
 func (c *Connection) ping() {
   for {
     time.Sleep(25 * time.Second)
-    c.send <- []byte(fmt.Sprintf("{\"type\": \"ping\", \"id\": %d}", c.id))
+    c.send <- []byte(fmt.Sprintf("{\"type\": \"ping\"}"))
   }
 }
 
 var dialer = &websocket.Dialer{
-  ReadBufferSize: 4096,
-  WriteBufferSize: 4096,
+  ReadBufferSize: 1024,
+  WriteBufferSize: 1024,
+}
+
+func (c *Connection) getWebSocket(host string) *websocket.Conn {
+  retries := 0
+
+  for {
+    ws, _, err := dialer.Dial(host, nil)
+
+    if err == nil {
+      return ws
+    } else {
+      if retries >= 3 {
+        log.Fatalln("Cannot open a websocket connection: ", err)
+      } else {
+        retries += 1
+      }
+    }
+  }
 }
 
 func (c *Connection) dial(host string) {
-  ws, _, err := dialer.Dial(host, nil)
-
-  if err != nil {
-    log.Fatalln("Cannot open a connection", err)
-  }
-
+  ws := c.getWebSocket(host)
   connections[c.id] = true
-  log.Println("Connection #", c.id, " opened", len(connections))
+  //log.Println("Connection #", c.id, " opened", len(connections))
   c.ws = ws
   go c.writer()
   go c.ping()
