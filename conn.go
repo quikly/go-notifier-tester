@@ -23,7 +23,9 @@ func (c *Connection) reader() {
     if err != nil {
       break
     }
-    log.Println("connection# ", c.id, " - Message: ", string(message[:]))
+    msgString := string(message[:])
+    receivedMsgs <- msgString
+    //log.Println("connection# ", c.id, " - Message: ", msgString)
   }
   c.ws.Close()
 }
