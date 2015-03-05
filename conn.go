@@ -21,6 +21,7 @@ func (c *Connection) reader() {
   for {
     _, message, err := c.ws.ReadMessage()
     if err != nil {
+      log.Println("Cannot read message: ", err)
       break
     }
     msgString := string(message[:])
@@ -34,6 +35,7 @@ func (c *Connection) writer() {
   for message := range c.send {
     err := c.ws.WriteMessage(websocket.TextMessage, message)
     if err != nil {
+      log.Println("Cannot write message: ", err)
       break
     }
   }
@@ -62,7 +64,8 @@ func (c *Connection) getWebSocket(host string) *websocket.Conn {
       return ws
     } else {
       if retries >= 3 {
-        log.Fatalln("Cannot open a websocket connection: ", err)
+        log.Println("Cannot open a websocket connection: ", err)
+        return nil
       } else {
         retries += 1
       }
@@ -72,10 +75,12 @@ func (c *Connection) getWebSocket(host string) *websocket.Conn {
 
 func (c *Connection) dial(host string) {
   ws := c.getWebSocket(host)
-  connections[c.id] = true
-  //log.Println("Connection #", c.id, " opened", len(connections))
-  c.ws = ws
-  go c.writer()
-  go c.ping()
-  c.reader()
+  if ws != nil {
+    connections[c.id] = true
+    //log.Println("Connection #", c.id, " opened", len(connections))
+    c.ws = ws
+    go c.writer()
+    go c.ping()
+    c.reader()
+  }
 }
