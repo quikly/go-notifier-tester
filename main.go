@@ -4,14 +4,22 @@ import (
   "flag"
   "time"
   "log"
+	"sync"
 )
+
+const MAX_CONCURRENT_DIAL = 50
+
+type ConnManager struct {
+	sync.Mutex
+	conns map[*Connection]bool
+}
 
 var (
   numConn = flag.Int("connections", 0, "number of concurrent connections")
   numMsg = flag.Int("messages", 5, "Number of messages to be broadcasted")
-  host = flag.String("host", "ws://localhost:8080/ws?poolId=deal:228", "websocket server address")
+  host = flag.String("host", "ws://localhost:8080/ws?channelId=deal:228", "websocket server address")
   done = make(chan bool)
-  connections = make(map[int]bool)
+	connections = &ConnManager{conns: make(map[*Connection]bool)}
   msgStats = make(map[string]int)
   receivedMsgs = make(chan string)
 )
@@ -21,13 +29,19 @@ func main() {
 
   if *numConn > 0 {
 
-    connections := make([]*Connection, *numConn)
+		var wg sync.WaitGroup
 
-    for i, c := range connections {
-      c = &Connection{id: i, send: make(chan []byte, 256)}
-      connections[i] = c
-      go connections[i].dial(*host)
-      time.Sleep(2 * time.Millisecond)
+    for i := 0; i < *numConn; i++ {
+			wg.Add(1)
+      c := &Connection{id: i, send: make(chan []byte, 256)}
+
+      go func() {
+				c.dial(*host, &wg)
+			}()
+
+			if (i+1)%MAX_CONCURRENT_DIAL == 0 {
+				wg.Wait()
+			}
     }
 
     go func () {

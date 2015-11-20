@@ -2,13 +2,18 @@ package main
 
 import (
   "log"
-  "time"
   "fmt"
+	"math/rand"
+	"sync"
+  "time"
 
   //"quikly/helper"
 
   "github.com/gorilla/websocket"
 )
+
+const MAX_DIAL_RETRIES = 5
+const DIAL_RETRY_DELAY = 500 * time.Millisecond
 
 type Connection struct {
   id int
@@ -44,18 +49,19 @@ func (c *Connection) writer() {
 
 func (c *Connection) ping() {
   for {
-    time.Sleep(25 * time.Second)
+		delay := time.Duration(rand.Intn(15) + 5)
+    time.Sleep(delay * time.Second)
     c.send <- []byte(fmt.Sprintf("{\"type\": \"ping\"}"))
   }
 }
 
-var dialer = &websocket.Dialer{
-  ReadBufferSize: 1024,
-  WriteBufferSize: 1024,
-}
-
 func (c *Connection) getWebSocket(host string) *websocket.Conn {
   retries := 0
+
+	dialer := &websocket.Dialer{
+	  ReadBufferSize: 1024,
+	  WriteBufferSize: 1024,
+	}
 
   for {
     ws, _, err := dialer.Dial(host, nil)
@@ -63,24 +69,31 @@ func (c *Connection) getWebSocket(host string) *websocket.Conn {
     if err == nil {
       return ws
     } else {
-      if retries >= 3 {
-        log.Println("Cannot open a websocket connection: ", err)
+      if retries >= MAX_DIAL_RETRIES {
+        log.Println(c.id, " - Cannot open a websocket connection: ", err)
         return nil
       } else {
+				time.Sleep(DIAL_RETRY_DELAY)
         retries += 1
       }
     }
   }
 }
 
-func (c *Connection) dial(host string) {
-  ws := c.getWebSocket(host)
-  if ws != nil {
-    connections[c.id] = true
-    //log.Println("Connection #", c.id, " opened", len(connections))
-    c.ws = ws
+func (c *Connection) dial(host string, wg *sync.WaitGroup) {
+  if c.ws = c.getWebSocket(host); c.ws != nil {
+		log.Println("Connection ID#", c.id, "opened.")
+		wg.Done()
+
+		connections.Lock()
+    connections.conns[c] = true
+		connections.Unlock()
+
     go c.writer()
     go c.ping()
     c.reader()
+  } else {
+		wg.Done()
+  	log.Println("Could not establish connection.")
   }
 }
