@@ -17,7 +17,7 @@ type ConnManager struct {
 var (
 	numConn      = flag.Int("connections", 0, "number of concurrent connections")
 	numMsg       = flag.Int("messages", 5, "Number of messages to be broadcasted")
-	host         = flag.String("host", "ws://localhost:8080/ws?channelId=deal:228", "websocket server address")
+	host         = flag.String("host", "ws://localhost:8081/ws?channelId=deal:228", "websocket server address")
 	done         = make(chan bool)
 	connections  = &ConnManager{conns: make(map[*Connection]bool)}
 	msgStats     = make(map[string]int64)
