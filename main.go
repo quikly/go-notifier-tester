@@ -75,10 +75,10 @@ func createClient(waitGroup *sync.WaitGroup, clientID int) {
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
-				log.Printf("client: %d read:", clientID, err)
+				log.Printf("client: %d read: %v", clientID, err)
 				return
 			}
-			log.Printf("client: %d recv: %s", clientID, message)
+			log.Printf("client: %d recv: %v", clientID, message)
 		}
 	}()
 
@@ -113,7 +113,7 @@ func createClient(waitGroup *sync.WaitGroup, clientID int) {
 			// waiting (with timeout) for the server to close the connection.
 			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
-				log.Printf("client: %d write close:", clientID, err)
+				log.Printf("client: %d write close: %v", clientID, err)
 				return
 			}
 			select {
