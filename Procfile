@@ -1,1 +1,1 @@
-web: bin/startup
+web: bin/ws-notifier-tester
