@@ -1,1 +1,1 @@
-web: bin/ws-notifier-tester
+worker: bin/ws-notifier-tester
