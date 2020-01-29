@@ -1,6 +1,6 @@
-// Copyright 2015 The Gorilla WebSocket Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
+// NOTES
+// Sometimes I just pring the output if the clientID is 0 (one per dyno)
+// to keep the output readable.
 
 package main
 
@@ -20,6 +20,9 @@ import (
 var hostFlag = flag.String("host", "www.quikly.localhost:5000", "http service address")
 var numCon = flag.Int("numCon", 1, "max number of concurrent clients")
 var schemeFlag = flag.String("scheme", "ws", "ws or wss (like http or https)")
+
+// rand.Seed(time.Now().UnixNano())
+// channelId := strconv.FormatUint(rand.Uint64(), 16)
 
 const subscribeJSON = `{"command":"subscribe","identifier":"{\"channel\":\"GraphQLChannel\",\"channelId\":\"16fe8fc2f8e\"}"}`
 const messageJSON = `{"command":"message","identifier":"{\"channel\":\"GraphQLChannel\",\"channelId\":\"16fe8fc2f8e\"}","data":"{\"query\":\"subscription getMessage {\\n  newMessage {\\n    message\\n    __typename\\n  }\\n}\\n\",\"variables\":{},\"operationName\":\"getMessage\",\"action\":\"execute\"}"}`
@@ -60,7 +63,9 @@ func createClient(waitGroup *sync.WaitGroup, clientID int) {
 	}
 
 	u := url.URL{Scheme: scheme, Host: host, Path: "/cable"}
-	log.Printf("client: %d connecting to %s", clientID, u.String())
+	if clientID == 0 {
+		log.Printf("client: %d connecting to %s", clientID, u.String())
+	}
 
 	c, res, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
@@ -78,7 +83,11 @@ func createClient(waitGroup *sync.WaitGroup, clientID int) {
 				log.Printf("client: %d read: %s", clientID, err)
 				return
 			}
-			log.Printf("client: %d recv: %s", clientID, message)
+
+			if clientID == 0 {
+				log.Printf("client: %d recv: %s", clientID, message)
+			}
+
 		}
 	}()
 
