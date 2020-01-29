@@ -18,7 +18,7 @@ import (
 )
 
 var hostFlag = flag.String("host", "www.quikly.localhost:5000", "http service address")
-var numCon = flag.Int("numCon", 5, "max number of concurrent clients")
+var numCon = flag.Int("numCon", 1, "max number of concurrent clients")
 var schemeFlag = flag.String("scheme", "ws", "ws or wss (like http or https)")
 
 const subscribeJSON = `{"command":"subscribe","identifier":"{\"channel\":\"GraphQLChannel\",\"channelId\":\"16fe8fc2f8e\"}"}`
@@ -37,6 +37,7 @@ func main() {
 	}
 
 	for i := 0; i < max; i++ {
+		waitGroup.Add(1)
 		go createClient(&waitGroup, i)
 	}
 
@@ -44,7 +45,6 @@ func main() {
 }
 
 func createClient(waitGroup *sync.WaitGroup, clientID int) {
-	waitGroup.Add(1)
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
@@ -75,10 +75,10 @@ func createClient(waitGroup *sync.WaitGroup, clientID int) {
 		for {
 			_, message, err := c.ReadMessage()
 			if err != nil {
-				log.Printf("client: %d read: %v", clientID, err)
+				log.Printf("client: %d read: %s", clientID, err)
 				return
 			}
-			log.Printf("client: %d recv: %v", clientID, message)
+			log.Printf("client: %d recv: %s", clientID, message)
 		}
 	}()
 
