@@ -15,6 +15,17 @@ import (
 const maxDialRetries = 5
 const dialRetryDelay = 500 * time.Millisecond
 
+type connManager struct {
+	sync.Mutex
+	conns map[*connection]bool
+}
+
+func (cMgr *connManager) stop() {
+	for conn := range cMgr.conns {
+		conn.close()
+	}
+}
+
 type connection struct {
 	id int
 	ws *websocket.Conn
@@ -29,15 +40,16 @@ func (c *connection) reader() {
 			log.Println("Cannot read message: ", err)
 			break
 		}
-		msgString := string(message[:])
-		receivedMsgs <- msgString
-		//log.Println("connection# ", c.id, " - Message: ", msgString)
+		msgString := fmt.Sprintf("%v:     <- %s", c.id, string(message[:]))
+		msgLog <- msgString
 	}
 	c.ws.Close()
 }
 
 func (c *connection) writer() {
 	for message := range c.send {
+		msgString := fmt.Sprintf("%v: -> %s", c.id, message)
+		msgLog <- msgString
 		err := c.ws.WriteMessage(websocket.TextMessage, message)
 		if err != nil {
 			log.Println("Cannot write message: ", err)
@@ -47,13 +59,14 @@ func (c *connection) writer() {
 	c.ws.Close()
 }
 
-func (c *connection) subscribe() {
+func (c *connection) subscribeToGraphQL() {
 	channelID := strconv.FormatInt(time.Now().Unix()+rand.Int63n(100000), 16)
 	c.send <- []byte(fmt.Sprintf("{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"GraphQLChannel\\\",\\\"channelId\\\":\\\"%s\\\"}\"}", channelID))
+
 	command := `{"command":"message","identifier":"{\"channel\":\"GraphQLChannel\",\"channelId\":\"%s\"}","data":"{\"query\":\"subscription claimedForDeal($dealHashid: String!) {\\n  claimedForDeal(dealHashid: $dealHashid) {\\n    quikly {\\n      id\\n      incentiveTiers {\\n        id\\n        rank\\n        description\\n        upperResponseTime\\n        quantity\\n        claimCount\\n        __typename\\n      }\\n      __typename\\n    }\\n    __typename\\n  }\\n}\\n\",\"variables\":{\"dealHashid\":\"%v\"},\"operationName\":\"claimedForDeal\",\"action\":\"execute\"}"}`
-	log.Println(fmt.Sprintf("Here: %s and %v", channelID, *dealHashid))
 	c.send <- []byte(fmt.Sprintf(command, channelID, *dealHashid))
 
+	// log.Println(fmt.Sprintf("%v: channelID=%s dealHashid=%v", c.id, channelID, *dealHashid))
 }
 
 func (c *connection) ping() {
@@ -83,7 +96,7 @@ func (c *connection) getWebSocket(host string) *websocket.Conn {
 		}
 
 		if retries >= maxDialRetries {
-			log.Println(c.id, " - Cannot open a websocket connection: ", err)
+			log.Println(c.id, ": Cannot open a websocket connection: ", err)
 			return nil
 		}
 
@@ -93,22 +106,37 @@ func (c *connection) getWebSocket(host string) *websocket.Conn {
 	}
 }
 
-func (c *connection) dial(host string, wg *sync.WaitGroup) {
-	log.Printf("connecting to %s", host)
+func (c *connection) close() {
+	err := c.ws.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	if err != nil {
+		log.Printf("%d: write close: %v", c.id, err)
+		return
+	}
+}
+
+func (c *connection) dial(host string, waitGroup *sync.WaitGroup) {
+	log.Printf("%v: connecting to %s", c.id, host)
 	if c.ws = c.getWebSocket(host); c.ws != nil {
-		log.Println("Connection ID#", c.id, "opened.")
-		wg.Done()
+		log.Printf("%v: connected", c.id)
+		waitGroup.Done()
 
 		connections.Lock()
 		connections.conns[c] = true
 		connections.Unlock()
 
+		// c.writer() reads from a 'send' channel and
+		// transmits it through the websocket connection
 		go c.writer()
-		//go c.ping()
-		c.subscribe()
+
+		c.subscribeToGraphQL()
+
+		// go c.ping()
+
+		// c.reader() start a loop that listens for messages and
+		// sends them to the receivedMsgs channel
 		c.reader()
 	} else {
-		wg.Done()
-		log.Println("Could not establish connection.")
+		waitGroup.Done()
+		log.Printf("%v: Could not establish connection", c.id)
 	}
 }
