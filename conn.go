@@ -4,23 +4,25 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-const MAX_DIAL_RETRIES = 5
-const DIAL_RETRY_DELAY = 500 * time.Millisecond
+const maxDialRetries = 5
+const dialRetryDelay = 500 * time.Millisecond
 
-type Connection struct {
+type connection struct {
 	id int
 	ws *websocket.Conn
 	// Buffered channel of outbound messages
 	send chan []byte
 }
 
-func (c *Connection) reader() {
+func (c *connection) reader() {
 	for {
 		_, message, err := c.ws.ReadMessage()
 		if err != nil {
@@ -34,7 +36,7 @@ func (c *Connection) reader() {
 	c.ws.Close()
 }
 
-func (c *Connection) writer() {
+func (c *connection) writer() {
 	for message := range c.send {
 		err := c.ws.WriteMessage(websocket.TextMessage, message)
 		if err != nil {
@@ -45,7 +47,16 @@ func (c *Connection) writer() {
 	c.ws.Close()
 }
 
-func (c *Connection) ping() {
+func (c *connection) subscribe() {
+	channelID := strconv.FormatInt(time.Now().Unix()+rand.Int63n(100000), 16)
+	c.send <- []byte(fmt.Sprintf("{\"command\":\"subscribe\",\"identifier\":\"{\\\"channel\\\":\\\"GraphQLChannel\\\",\\\"channelId\\\":\\\"%s\\\"}\"}", channelID))
+	command := `{"command":"message","identifier":"{\"channel\":\"GraphQLChannel\",\"channelId\":\"%s\"}","data":"{\"query\":\"subscription claimedForDeal($dealHashid: String!) {\\n  claimedForDeal(dealHashid: $dealHashid) {\\n    quikly {\\n      id\\n      incentiveTiers {\\n        id\\n        rank\\n        description\\n        upperResponseTime\\n        quantity\\n        claimCount\\n        __typename\\n      }\\n      __typename\\n    }\\n    __typename\\n  }\\n}\\n\",\"variables\":{\"dealHashid\":\"%v\"},\"operationName\":\"claimedForDeal\",\"action\":\"execute\"}"}`
+	log.Println(fmt.Sprintf("Here: %s and %v", channelID, *dealHashid))
+	c.send <- []byte(fmt.Sprintf(command, channelID, *dealHashid))
+
+}
+
+func (c *connection) ping() {
 	for {
 		delay := time.Duration(rand.Intn(15) + 5)
 		time.Sleep(delay * time.Second)
@@ -53,7 +64,7 @@ func (c *Connection) ping() {
 	}
 }
 
-func (c *Connection) getWebSocket(host string) *websocket.Conn {
+func (c *connection) getWebSocket(host string) *websocket.Conn {
 	retries := 0
 
 	dialer := &websocket.Dialer{
@@ -61,24 +72,29 @@ func (c *Connection) getWebSocket(host string) *websocket.Conn {
 		WriteBufferSize: 1024,
 	}
 
+	headers := http.Header{}
+	headers.Set("Origin", "https://quikly.github.io")
+
 	for {
-		ws, _, err := dialer.Dial(host, nil)
+		ws, _, err := dialer.Dial(host, headers)
 
 		if err == nil {
 			return ws
-		} else {
-			if retries >= MAX_DIAL_RETRIES {
-				log.Println(c.id, " - Cannot open a websocket connection: ", err)
-				return nil
-			} else {
-				time.Sleep(DIAL_RETRY_DELAY)
-				retries += 1
-			}
 		}
+
+		if retries >= maxDialRetries {
+			log.Println(c.id, " - Cannot open a websocket connection: ", err)
+			return nil
+		}
+
+		time.Sleep(dialRetryDelay)
+		retries++
+
 	}
 }
 
-func (c *Connection) dial(host string, wg *sync.WaitGroup) {
+func (c *connection) dial(host string, wg *sync.WaitGroup) {
+	log.Printf("connecting to %s", host)
 	if c.ws = c.getWebSocket(host); c.ws != nil {
 		log.Println("Connection ID#", c.id, "opened.")
 		wg.Done()
@@ -88,7 +104,8 @@ func (c *Connection) dial(host string, wg *sync.WaitGroup) {
 		connections.Unlock()
 
 		go c.writer()
-		go c.ping()
+		//go c.ping()
+		c.subscribe()
 		c.reader()
 	} else {
 		wg.Done()

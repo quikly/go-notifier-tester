@@ -3,48 +3,48 @@ package main
 import (
 	"flag"
 	"log"
-	"strings"
+	"net/url"
 	"sync"
 	"time"
 )
 
-const MAX_CONCURRENT_DIAL = 50
+const maxConcurrentDial = 50
 
-type ConnManager struct {
+type connManager struct {
 	sync.Mutex
-	conns map[*Connection]bool
+	conns map[*connection]bool
 }
 
 var (
 	numConn      = flag.Int("connections", 0, "number of concurrent connections")
-	numMsg       = flag.Int("messages", 5, "Number of messages to be broadcasted")
-	host         = flag.String("host", "ws://localhost:8081/ws", "websocket server address")
-	deal         = flag.String("deal", "10107", "deal id")
+	host         = flag.String("host", "www.quikly.localhost:5000", "websocket server address")
+	dealHashid   = flag.String("dealHashid", "PVZhve", "The deal hashid")
 	done         = make(chan bool)
-	connections  = &ConnManager{conns: make(map[*Connection]bool)}
+	connections  = &connManager{conns: make(map[*connection]bool)}
 	msgStats     = make(map[string]int64)
 	receivedMsgs = make(chan string)
 )
 
 func main() {
 	flag.Parse()
-	dialAddr := strings.Join([]string{*host, "?channelId=deal:", *deal}, "")
 
 	if !(*numConn > 0) {
 		return
 	}
 
+	u := url.URL{Scheme: "wss", Host: *host, Path: "/websocket"}
+
 	var wg sync.WaitGroup
 
 	for i := 0; i < *numConn; i++ {
 		wg.Add(1)
-		c := &Connection{id: i, send: make(chan []byte, 256)}
+		c := &connection{id: i, send: make(chan []byte, 256)}
 
 		go func() {
-			c.dial(dialAddr, &wg)
+			c.dial(u.String(), &wg)
 		}()
 
-		if (i+1)%MAX_CONCURRENT_DIAL == 0 {
+		if (i+1)%maxConcurrentDial == 0 {
 			wg.Wait()
 		}
 	}
@@ -63,7 +63,7 @@ func main() {
 	for {
 		m := <-receivedMsgs
 		if _, ok := msgStats[m]; ok {
-			msgStats[m] += 1
+			msgStats[m]++
 		} else {
 			msgStats[m] = 1
 		}
