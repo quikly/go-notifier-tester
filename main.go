@@ -16,6 +16,8 @@ var (
 	host           = flag.String("host", "www.quikly.localhost:5000", "websocket server address")
 	dealHashid     = flag.String("dealHashid", "PVZhve", "The deal hashid")
 	scheme         = flag.String("scheme", "ws", "ws or wss (like http or https)")
+	requestOrigin  = flag.String("origin", "https://quikly.github.io", "request origin to set in header")
+	apiKey         string
 	connections    = &connManager{conns: make(map[*connection]bool)}
 	done           = make(chan bool)
 	msgLog         = make(chan string)
@@ -31,6 +33,8 @@ func main() {
 	}
 
 	u := url.URL{Scheme: *scheme, Host: *host, Path: "/websocket"}
+
+	apiKey = os.Getenv("API_KEY")
 
 	var waitGroup sync.WaitGroup
 
@@ -61,7 +65,7 @@ func main() {
 			case msg := <-msgLog:
 				log.Println(msg)
 			case <-ticker.C:
-				log.Println(".")
+				log.Println("connections:", len(connections.conns))
 			case <-interrupt:
 				log.Println("Stopping...")
 				connections.stop()

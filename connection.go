@@ -86,7 +86,11 @@ func (c *connection) getWebSocket(host string) *websocket.Conn {
 	}
 
 	headers := http.Header{}
-	headers.Set("Origin", "https://quikly.github.io")
+	headers.Set("Origin", *requestOrigin)
+
+	if apiKey != "" {
+		headers.Set("APIKey", apiKey)
+	}
 
 	for {
 		ws, _, err := dialer.Dial(host, headers)
